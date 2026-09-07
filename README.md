@@ -13,6 +13,89 @@ now, not once the pipeline is "done."
 
 ## Known Limitations
 
+### Survivorship bias - the single most important caveat on every backtest number below
+
+**The universe is sourced from NSE's and BSE's live, current equity lists,
+not a point-in-time historical listing snapshot** -
+`NSE_EQUITY_LIST_URL` (`nsearchives.nseindia.com/.../EQUITY_L.csv`) is
+NSE's present-day master list, and `BSE_ACTIVE_EQUITY_API_URL`'s name says
+it outright: **active** scrips only. A company that was delisted, went
+through NCLT insolvency, or was otherwise removed from trading at any
+point before "today" (whenever `build_universe()` is run) is invisible to
+this pipeline - not excluded by a filter, absent from the source data
+itself, for every rebalance date in every backtest, past or future.
+
+**Checked directly against real companies, not assumed.** Nine well-known
+names that were delisted, went into insolvency, or were extinguished via
+NCLT resolution during 2019-2026, checked against the current NSE equity
+list:
+
+| Company | Status 2019-2026 | In current universe? |
+|---|---|---|
+| DHFL | Insolvency, equity extinguished 2021 | **Absent** |
+| Reliance Capital | Insolvency, equity extinguished 2024 | **Absent** |
+| Future Retail | Insolvency, delisted 2023-24 | **Absent** |
+| Future Lifestyle Fashions | Insolvency, delisted | **Absent** |
+| Future Consumer | Insolvency, delisted | **Absent** |
+| Jet Airways | Grounded 2019, insolvency | **Absent** |
+| IL&FS Transportation Networks | Insolvency-linked distress | **Absent** |
+| Reliance Communications | Distressed, still listed (control case) | Present |
+| Yes Bank | 2020 crisis, still listed (control case) | Present |
+
+Seven of seven genuinely delisted/extinguished names are absent; both
+control cases (companies that had real crises but stayed listed) are
+correctly present - confirming this is specifically a delisting gap, not
+a general data-quality problem.
+
+**Rough scale, not a full count** (a full count would require
+cross-referencing NCLT resolutions, voluntary delistings/buyouts, BSE's
+own list, and mergers against historical fundamentals eligibility - not
+pursued, no reliably obtainable point-in-time listing source was found
+within reasonable effort this session): NSE's own published "Orders of
+Delisting Committee" record **at least 57 companies compulsorily
+delisted within the 2019-06-01 to 2026-06-01 window** on the NSE channel
+alone. This is a lower bound - it excludes BSE's separate list, voluntary
+delistings, mergers, and critically the NCLT-insolvency-resolution
+channel where the largest, best-known casualties above (DHFL, Future
+Retail, Reliance Capital, ITNL) actually sit, since that's a different
+process from the Delisting Committee's compulsory-delisting orders. Most
+names on the NSE list are small/dormant companies that likely never had
+real fundamentals data to begin with; the real, Magic-Formula-relevant
+count (companies that would have had a genuine shot at ranking at some
+point) is almost certainly smaller than 57 but larger than the 7
+hand-confirmed cases above - a real, non-trivial number either way, not
+a rounding error.
+
+**A related, same-direction effect**: `compute_period_return` silently
+drops a holding's weight from a period's return if its price is missing
+at the period's end date, rather than counting it as a loss - reasonable
+in isolation (a genuine data gap shouldn't be assumed to be a total
+wipeout), but it means a stock that *was* bought into a basket and *then*
+failed mid-holding-period also doesn't get counted as the loss it
+actually was. Same direction of bias as the universe gap, compounding it.
+
+**This is not a minor caveat and should not be read as one.** Every
+number in this backtest - the +29.4% CAGR net of transaction costs, the
+0.71 Sharpe ratio, the -10.3% max drawdown, and especially the **100%
+hit rate against Nifty 500 TRI across all 7 periods** - is computed
+against a universe that, by construction, never includes the real
+failures a genuine point-in-time small/mid-cap value screen would have
+been exposed to. The 2019-2020 COVID-crash period is the clearest place
+to see why this matters: the strategy's basket fell far less than either
+benchmark that year, a result read elsewhere in this README as evidence
+of real stock-selection alpha - but a screen that can never pick a stock
+that goes to zero is mechanically going to look more resilient in a
+crash than one that can, and 2019-2021 is exactly when several of the
+confirmed-absent names above (DHFL, Jet Airways, Reliance Capital) were
+failing. The true picture likely still shows real outperformance - the
+margin over even the cap-tilt-matched blend is large enough that
+survivorship bias alone is unlikely to explain all of it - but the exact
+size of that margin, and the unusually clean 100% hit rate specifically,
+should be treated as inflated by an unknown, likely non-trivial amount
+until a point-in-time listing source is found and wired in. No further
+number in this document should be taken at face value without this
+context.
+
 ### Surveillance/ASM-GSM watchlist flagging - not implemented
 
 SPEC.md section 1 asks to exclude companies under NSE/BSE's surveillance

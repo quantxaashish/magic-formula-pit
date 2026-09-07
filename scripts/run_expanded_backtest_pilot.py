@@ -72,7 +72,6 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
-import yfinance as yf
 
 from magicformula.data_fetch.fundamentals import (
     FundamentalsRecord,
@@ -82,10 +81,8 @@ from magicformula.data_fetch.fundamentals import (
 from magicformula.data_fetch.prices import (
     PRICE_LOOKUP_MAX_TOLERANCE_DAYS,
     SHARES_LOOKUP_MAX_TOLERANCE_DAYS,
-    compute_point_in_time_market_cap,
-    filter_persisted_values,
+    fetch_point_in_time_series,
     nearest_value_lookup,
-    yf_symbol,
 )
 from magicformula.formulas import FinancialInputs, compute_metrics
 from magicformula.ranker import RankedStock, rank_universe
@@ -131,43 +128,6 @@ def load_fundamentals(symbols: set[str]) -> list[FundamentalsRecord]:
         "cwip", "borrowings", "market_cap", "source_url", "statement", "cap_bucket",
     ]
     return [FundamentalsRecord(**row._asdict()) for row in df[fields].itertuples(index=False)]
-
-
-def fetch_point_in_time_series(nse_symbol: str, bse_symbol: str | None) -> tuple[dict, dict] | None:
-    """Real price + cleaned point-in-time shares-outstanding history, one
-    fetch per company covering the whole 2016-2026 window (yfinance
-    returns the whole period in one call), reused across all 11
-    rebalance dates via nearest_value_lookup. period="max" and a shares
-    start of 2010 so the 2016-2018 rebalances aren't starved of history
-    for older, long-listed companies - a small-cap or recently-listed
-    company that genuinely has no data that far back will just correctly
-    return None for those early dates, not be forced to look further
-    than it has.
-    """
-    try:
-        symbol = yf_symbol(nse_symbol, bse_symbol)
-    except ValueError:
-        return None
-
-    ticker = yf.Ticker(symbol)
-    try:
-        hist = ticker.history(period="max")
-        if hist is None or hist.empty:
-            return None
-        price_series = {ts.date(): float(px) for ts, px in hist["Close"].items()}
-
-        shares = ticker.get_shares_full(start="2010-01-01")
-        if shares is None or len(shares) == 0:
-            return None
-        raw_shares_series = {ts.date(): float(v) for ts, v in shares.items()}
-        shares_series = filter_persisted_values(raw_shares_series)
-        if not shares_series:
-            return None
-    except Exception as exc:  # noqa: BLE001 - yfinance raises all sorts
-        logger.warning("%s: price/shares fetch failed: %s", symbol, exc)
-        return None
-
-    return price_series, shares_series
 
 
 def fetch_all_series(symbols_with_fundamentals, entry_by_symbol) -> dict[str, tuple[dict, dict]]:

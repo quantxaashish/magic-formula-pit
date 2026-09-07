@@ -358,3 +358,46 @@ def compute_point_in_time_market_cap(
     if price is None or shares_outstanding is None:
         return None
     return price * shares_outstanding
+
+
+def fetch_point_in_time_series(
+    nse_symbol: str, bse_symbol: str | None
+) -> tuple[dict[date, float], dict[date, float]] | None:
+    """Real price + cleaned point-in-time shares-outstanding history for
+    one company, covering as much history as yfinance has (period="max"
+    for price, shares from 2010 - a small-cap or recently-listed company
+    that genuinely has no data that far back correctly returns None for
+    early dates via nearest_value_lookup's tolerance, rather than being
+    forced to look further than it has).
+
+    Originally lived only in scripts/run_expanded_backtest_pilot.py -
+    moved here so cli.py (and any future caller) goes through the same
+    tested library function instead of a script re-implementing it a
+    third time. Returns None if either series is entirely unusable
+    (ticker resolution failure, no price history, no shares history after
+    filter_persisted_values' outlier rejection - decision 0008).
+    """
+    try:
+        symbol = yf_symbol(nse_symbol, bse_symbol)
+    except ValueError:
+        return None
+
+    ticker = yf.Ticker(symbol)
+    try:
+        hist = ticker.history(period="max")
+        if hist is None or hist.empty:
+            return None
+        price_series = {ts.date(): float(px) for ts, px in hist["Close"].items()}
+
+        shares = ticker.get_shares_full(start="2010-01-01")
+        if shares is None or len(shares) == 0:
+            return None
+        raw_shares_series = {ts.date(): float(v) for ts, v in shares.items()}
+        shares_series = filter_persisted_values(raw_shares_series)
+        if not shares_series:
+            return None
+    except Exception as exc:  # noqa: BLE001 - yfinance raises all sorts
+        logger.warning("%s: price/shares fetch failed: %s", symbol, exc)
+        return None
+
+    return price_series, shares_series

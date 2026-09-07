@@ -4,12 +4,69 @@ NSE/BSE quantitative value screener implementing Joel Greenblatt's Magic
 Formula for the Indian equity market. See `SPEC.md` for the full
 specification this project is being built against.
 
-This README currently covers Known Limitations only (SPEC.md section 13
-asks for a fuller README - data source reliability, standard vs. strict
-ROCE, survivorship bias, AMFI update instructions - once more of the
-pipeline is built). The limitations below are tracked here because they
-affect real decisions (what to trust, what needs a human check) starting
-now, not once the pipeline is "done."
+This README currently covers Usage and Known Limitations (SPEC.md section
+13 asks for a fuller README - data source reliability, standard vs.
+strict ROCE, AMFI update instructions - once more of the pipeline is
+built). The limitations below are tracked here because they affect real
+decisions (what to trust, what needs a human check) starting now, not
+once the pipeline is "done."
+
+## Usage
+
+Install (editable, so `magicformula` resolves to this checkout):
+
+```bash
+pip install -e .
+```
+
+Every parameter that used to be hardcoded (and inconsistently duplicated)
+across `scripts/*.py` - basket size, buffer multiplier, price/shares
+tolerance, transaction cost, rebalance cadence, anomaly mode - now lives
+in `config/settings.yaml`, the single source of truth `cli.py` reads
+from. Edit it there, not in code, to change any of these.
+
+**Producing the current basket from a clean state - the exact 4-command
+sequence actually run and confirmed working**, not a hypothetical one:
+
+```bash
+magicformula build-universe   # ~5 seconds
+magicformula fetch-data       # ~30-45 min on a warm cache, hours cold - see below
+magicformula rank             # ~4 seconds - optional, basket already ranks internally
+magicformula basket           # ~3 seconds
+```
+
+`build-universe` fetches NSE+BSE+AMFI and writes
+`data/processed/universe.csv` (a real run: 5,281 merged entities, 1,932
+eligible after exclusions). `fetch-data` is the slow step - it fetches
+fundamentals (screener.in) and point-in-time price/shares series
+(yfinance) for every eligible company, writing
+`data/processed/fundamentals.parquet` and caching to
+`data/raw/screener_html_cache/` and
+`data/raw/point_in_time_series_cache.pkl`. **This is genuinely slow even
+on a warm cache** - a real run against an almost-fully-warm cache (1,774
+of 1,932 companies already cached, 158 new ones fetched live) took **38
+minutes**, because parsing ~1,900 cached HTML statements and rebuilding
+the anomaly-check peer pools has real CPU cost independent of network
+I/O; budget 1.5-2.5+ hours on a fully cold cache. `rank` prints the
+current Magic Formula ranking without touching the turnover buffer or
+holdings state - useful to inspect, not required before `basket`. `basket`
+does the real work: ranks, applies the turnover buffer against whatever
+was last held (`data/processed/current_holdings.json`, empty on a first
+run), and writes `data/processed/current_basket.csv` - a real run
+produced an 89-name equal-weighted basket.
+
+`magicformula backtest` runs the full historical rebalance walk
+(`config/settings.yaml`'s `backtest.start_year` through the current year)
+and reports CAGR/volatility/Sharpe/max-drawdown/turnover; pass
+`--benchmark-returns-json path/to/returns.json` (a list of per-period
+returns, one shorter than the rebalance-date count) for hit-rate and
+excess-return stats against a real index - Nifty 500 TRI values aren't
+fetched automatically (see `docs/decisions/0012` for how they were
+sourced by hand for this project's own backtest). `magicformula
+dashboard` is a documented stub - not yet implemented, sequenced after
+`quality_overlay.py` (Phase 2) so the dashboard presents that layer's
+effect on the basket, not a version of this pipeline built before it
+exists.
 
 ## Known Limitations
 
@@ -220,6 +277,20 @@ this catches and why). The peer group falls back through a three-tier
 hierarchy (narrow sector -> broad sector -> cap bucket) when a sector has
 too few members - see the same decision doc's follow-up for how that was
 validated. This reduces, but does not eliminate, the risk of a distorted
-fundamentals record flowing into a rank. Default behavior excludes a
-flagged company from ranking entirely (configurable to flag-only for
-manual review).
+fundamentals record flowing into a rank.
+
+**Production default is `flag_only` (`config/settings.yaml`'s
+`fundamentals.anomaly_mode`), decided by running both modes side by side
+on the real 2019-2026 backtest, not by assumption** (`docs/decisions/0013`).
+Exclude-mode was tested and found comparable, not better: CAGR 28.86% vs.
+flag-only's 29.20%, Sharpe 0.695 vs. 0.702 (both worse in exclude-mode,
+by less than sampling noise on a 7-period series), max drawdown 1 point
+better in exclude-mode - but that entire drawdown difference traced to 6
+specific companies excluded at a single rebalance date that happened to
+crash hard in the COVID year, confirmed as coincidence, not a structural
+property of exclude-mode. flag_only also keeps `anomaly_reasons` populated
+on every record for manual review - exactly the kind of investigation
+that correctly identified two false-positive-prone anomaly flags (VEDL,
+PAGEIND) as a peer-group-mismatch and a one-off balance-sheet event
+respectively, rather than genuine multi-year distortions. Change the
+default only with a new decision doc, not silently in a script.

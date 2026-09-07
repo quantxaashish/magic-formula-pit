@@ -77,7 +77,6 @@ import yfinance as yf
 from magicformula.data_fetch.fundamentals import (
     FundamentalsRecord,
     _latest_record_per_symbol,
-    apply_anomaly_filter,
     check_fundamentals_anomalies,
 )
 from magicformula.data_fetch.prices import (
@@ -110,10 +109,19 @@ logger = logging.getLogger("expanded_backtest_pilot")
 
 
 def load_fundamentals(symbols: set[str]) -> list[FundamentalsRecord]:
-    """Same approach as the first pilot's load_fundamentals: recompute
-    anomaly_reasons fresh on this run's own symbol set and current
-    calibration (decision 0010), rather than trusting the stale column
-    already in full_universe_fundamentals.parquet.
+    """Loads every fiscal year's raw records, unfiltered by anomaly status.
+
+    Anomaly status is NOT computed here anymore. It used to be: computed
+    once, globally, on each symbol's single latest fiscal year, then
+    stamped onto every fiscal-year record for that symbol via
+    apply_anomaly_filter's symbol-keyed (not (symbol, fiscal_year)-keyed)
+    lookup - so a company anomalous only in its most recent year showed
+    as flagged in every historical rebalance's basket too, real bug,
+    confirmed on VEDL (flagged FY2019-FY2025 baskets purely because of an
+    FY2026 balance-sheet event; point-in-time re-check showed those six
+    years were clean). Fixed by moving the anomaly check into make_rank_fn,
+    computed fresh per rebalance date against that date's own
+    point-in-time-eligible latest-year records - see make_rank_fn.
     """
     df = pd.read_parquet("data/raw/full_universe_fundamentals.parquet")
     df = df[df["symbol"].isin(symbols)]
@@ -122,10 +130,7 @@ def load_fundamentals(symbols: set[str]) -> list[FundamentalsRecord]:
         "depreciation_amortization", "total_assets", "other_liabilities", "investments",
         "cwip", "borrowings", "market_cap", "source_url", "statement", "cap_bucket",
     ]
-    records = [FundamentalsRecord(**row._asdict()) for row in df[fields].itertuples(index=False)]
-
-    anomaly_results = check_fundamentals_anomalies(_latest_record_per_symbol(records))
-    return apply_anomaly_filter(records, anomaly_results, mode="flag_only")
+    return [FundamentalsRecord(**row._asdict()) for row in df[fields].itertuples(index=False)]
 
 
 def fetch_point_in_time_series(nse_symbol: str, bse_symbol: str | None) -> tuple[dict, dict] | None:
@@ -206,15 +211,26 @@ def make_rank_fn(
     sector_by_symbol_all: dict[str, str],
     ranked_by_date: dict[date, list[RankedStock]],
     coverage_rows: list[tuple],
+    flagged_by_date: dict[date, set[str]],
 ):
     """`coverage_rows` accumulates (rebalance_date, symbol, cap_bucket,
     sector, reason) for every fundamentals-eligible company at every
     rebalance, `reason` in {"ranked", "no_fetch", "no_price", "no_shares"}
     - the exact breakdown decision 0012 asked for, not a single lumped
     "skipped" count.
+
+    `flagged_by_date` accumulates this rebalance date's own anomaly-flagged
+    symbol set, computed fresh here (not reused from a prior date or a
+    globally-latest-year snapshot) - the point-in-time fix for the
+    load_fundamentals bug described above. mode stays flag_only: nothing
+    is dropped from `metrics`, this only records which symbols were
+    flagged for this specific date's basket/CSV/log reporting.
     """
     def rank_fn(eligible: list[FundamentalsRecord], rebalance_date: date) -> list[RankedStock]:
         latest = _latest_record_per_symbol(eligible)
+        anomaly_results = check_fundamentals_anomalies(latest)
+        flagged_by_date[rebalance_date] = {r.symbol for r in anomaly_results if r.flagged}
+
         metrics = []
         reason_counts: dict[str, int] = {}
         for r in latest:
@@ -312,7 +328,11 @@ def main() -> None:
 
     ranked_by_date: dict[date, list[RankedStock]] = {}
     coverage_rows: list[tuple] = []
-    rank_fn = make_rank_fn(price_shares_by_symbol, cap_bucket_by_symbol, sector_by_symbol, ranked_by_date, coverage_rows)
+    flagged_by_date: dict[date, set[str]] = {}
+    rank_fn = make_rank_fn(
+        price_shares_by_symbol, cap_bucket_by_symbol, sector_by_symbol,
+        ranked_by_date, coverage_rows, flagged_by_date,
+    )
 
     steps = run_rebalance_walk(
         REBALANCE_DATES,
@@ -323,14 +343,12 @@ def main() -> None:
         listing_date_by_symbol=listing_date_by_symbol,
     )
 
-    flagged_symbols = {r.symbol for r in _latest_record_per_symbol(fundamentals) if r.anomaly_reasons}
-
     for step in steps:
         basket_by_bucket: dict[str, int] = {}
         for s in step.outcome.holdings:
             b = cap_bucket_by_symbol.get(s)
             basket_by_bucket[b] = basket_by_bucket.get(b, 0) + 1
-        flagged_in_basket = sorted(step.outcome.holdings & flagged_symbols)
+        flagged_in_basket = sorted(step.outcome.holdings & flagged_by_date[step.rebalance_date])
         logger.info(
             "%s: eligible=%d, basket size=%d %s, buys=%d, sells=%d, anomaly-flagged in basket=%s",
             step.rebalance_date, step.eligible_universe_size, len(step.outcome.holdings),
@@ -349,6 +367,7 @@ def main() -> None:
         ])
         for step in steps:
             ranked_lookup = {r.symbol: r for r in ranked_by_date.get(step.rebalance_date, [])}
+            flagged_this_date = flagged_by_date[step.rebalance_date]
             for symbol, weight in sorted(step.outcome.weights.items()):
                 rs = ranked_lookup.get(symbol)
                 writer.writerow([
@@ -357,7 +376,7 @@ def main() -> None:
                     rs.roce if rs else None, rs.ey if rs else None,
                     rs.rank_roce if rs else None, rs.rank_ey if rs else None,
                     rs.combined_rank if rs else None, rs.position if rs else None,
-                    symbol in flagged_symbols,
+                    symbol in flagged_this_date,
                 ])
     logger.info("Baskets written to %s", out_path)
 

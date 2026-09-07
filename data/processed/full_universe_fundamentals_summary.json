@@ -1,0 +1,56 @@
+{
+  "total_symbols_attempted": 1932,
+  "successful_extractions": 18265,
+  "failed_extractions": 18,
+  "failed_symbols": [
+    "ABAN",
+    "ACCELYA",
+    "ASTRON",
+    "COMPINFO",
+    "EDUCOMP",
+    "FEL",
+    "GENCON",
+    "IL&FSTRANS",
+    "MTEDUCARE",
+    "ORISSAMINE",
+    "RAJVIR",
+    "SETCO",
+    "SETUINFRA",
+    "SKIL",
+    "SUPREMEENG",
+    "VIKASLIFE",
+    "VINEETLAB",
+    "VIVIMEDLAB"
+  ],
+  "failure_categories": {
+    "page_template_mismatch": 18
+  },
+  "attempted_by_bucket": {
+    "large": 71,
+    "mid": 115,
+    "small": 1746
+  },
+  "failed_by_bucket": {
+    "large": 0,
+    "mid": 0,
+    "small": 18
+  },
+  "failure_rate_pct_by_bucket": {
+    "large": 0.0,
+    "mid": 0.0,
+    "small": 1.03
+  },
+  "sector_excluded_count": 127,
+  "sector_excluded_by_bucket": {
+    "large": 5,
+    "mid": 15,
+    "small": 107
+  },
+  "flagged_by_anomaly_check": 914,
+  "companies_checked_for_anomalies": 1787,
+  "peer_tier_usage_counts": {
+    "sector": 3574
+  },
+  "elapsed_seconds": 6523.4,
+  "correction_note": "flagged_by_anomaly_check and peer_tier_usage_counts were originally 10558 and {'sector': 36530} - wrong, from a script bug (fixed in scripts/full_universe_fundamentals_fetch.py, see docs/decisions/0009): the summary re-ran check_fundamentals_anomalies() on the raw multi-year record list instead of one-record-per-company, so every company's anomaly check ran once per fiscal year it had data for (~10.2 years on average) instead of once on its latest year, checked against a peer median that wasn't reliably latest-year either. Corrected values recomputed directly from full_universe_fundamentals.parquet's existing per-record anomaly_reasons field, which was NOT affected by this bug (that field came from fetch_universe_fundamentals's own internal check, which deduped correctly) - verified uniform per company across all its fiscal years (0 discrepancies) before trusting it."
+}

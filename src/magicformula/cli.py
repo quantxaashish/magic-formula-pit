@@ -276,6 +276,16 @@ def rank_cmd(
         for s in stocks_sorted[:top]:
             typer.echo(f"  {s.position:>3}. {s.symbol:<15} ROCE={s.roce:.2%}  EY={s.ey:.2%}  combined_rank={s.combined_rank}")
 
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    ranking_path = PROCESSED_DIR / "current_ranking.csv"
+    with ranking_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["as_of", "position", "symbol", "cap_bucket", "roce", "ey", "rank_roce", "rank_ey", "combined_rank"])
+        for r in sorted(ranked, key=lambda s: (s.cap_bucket or "", s.position)):
+            writer.writerow([rebalance_date.isoformat(), r.position, r.symbol, r.cap_bucket,
+                              r.roce, r.ey, r.rank_roce, r.rank_ey, r.combined_rank])
+    typer.echo(f"\nFull ranking written to {ranking_path}")
+
 
 @app.command("basket")
 def basket_cmd(
@@ -388,9 +398,16 @@ def backtest_cmd(
         periods_per_year=settings.backtest.periods_per_year,
     )
 
+    # Named cli_backtest_* deliberately, not backtest_stats.json/
+    # backtest_baskets.csv - this repo already has real, manually-produced
+    # research snapshots at those exact names (decision 0012/0013's
+    # Nifty-500-TRI-benchmarked results), and this command overwrote them
+    # by accident twice during development before this rename. A fresh
+    # clone won't have that collision, but the distinct name costs
+    # nothing and removes the risk permanently either way.
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    write_basket_composition_csv(result.steps, PROCESSED_DIR / "backtest_baskets.csv")
-    with (PROCESSED_DIR / "backtest_stats.json").open("w") as f:
+    write_basket_composition_csv(result.steps, PROCESSED_DIR / "cli_backtest_baskets.csv")
+    with (PROCESSED_DIR / "cli_backtest_stats.json").open("w") as f:
         json.dump({
             "period_returns": result.period_returns, "benchmark_returns": result.benchmark_returns,
             "equity_curve": result.equity_curve, "benchmark_equity_curve": result.benchmark_equity_curve,
@@ -402,19 +419,29 @@ def backtest_cmd(
     typer.echo(f"Backtest {rebalance_dates[0]} -> {rebalance_dates[-1]}: CAGR={s.cagr:+.2%}  "
                f"vol={s.annualized_volatility:.2%}  Sharpe={s.sharpe_ratio:.3f}  "
                f"max_drawdown={s.max_drawdown:.2%}  turnover={s.mean_turnover:.2%}")
-    typer.echo(f"Written to {PROCESSED_DIR}/backtest_baskets.csv and backtest_stats.json")
+    typer.echo(f"Written to {PROCESSED_DIR}/cli_backtest_baskets.csv and cli_backtest_stats.json")
 
 
 @app.command("dashboard")
-def dashboard_cmd() -> None:
-    """Not yet implemented. Sequenced after quality_overlay.py (Phase 2 -
-    F-score/Z-score/governance/momentum) per the project's own ordering:
-    the dashboard should present whatever the backtest actually shows,
-    including the quality overlay's effect on it, not a version of this
-    pipeline built before that layer exists. See README's Known
-    Limitations and docs/decisions/ for what's built so far."""
-    typer.echo("dashboard: not yet implemented - planned after quality_overlay.py. "
-               "See README.md and docs/decisions/ for current pipeline status.")
+def dashboard_cmd(
+    port: int = typer.Option(8501, help="Local port to serve the dashboard on"),
+) -> None:
+    """Launch the Streamlit dashboard: browse the current basket, the
+    full rank table, and backtest results (SPEC.md section 9). None of
+    these three views need quality_overlay.py's Phase 2 output - they
+    only read files `rank`, `basket`, and `backtest` already produce.
+    quality_overlay.py, once built, adds its own columns/filters to these
+    same views rather than being a prerequisite for them.
+    """
+    import subprocess
+    import sys
+
+    app_path = Path(__file__).parent / "dashboard_app.py"
+    typer.echo(f"Launching dashboard on http://localhost:{port} (Ctrl+C to stop)...")
+    subprocess.run([
+        sys.executable, "-m", "streamlit", "run", str(app_path),
+        "--server.port", str(port), "--server.headless", "true",
+    ])
 
 
 if __name__ == "__main__":

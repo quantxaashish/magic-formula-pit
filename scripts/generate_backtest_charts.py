@@ -35,14 +35,14 @@ except FileNotFoundError:
     pass
 
 fig, ax = plt.subplots(figsize=(10, 5.5))
-ax.plot(dates, equity, marker="o", linewidth=2, color="#1f77b4", label="Magic Formula India (net of 25bps txn cost)")
+ax.plot(dates, equity, marker="o", linewidth=2, color="#1f77b4", label="Magic Formula PIT (net of 25bps txn cost)")
 ax.plot(dates, bench_equity, marker="o", linewidth=2, color="#7f7f7f", label="Nifty 500 TRI (benchmark)")
 if blend_equity is not None:
     ax.plot(dates, blend_equity, marker="o", linewidth=2, color="#ff7f0e", linestyle="--",
             label="Cap-tilt-matched blend (NIFTY100/MIDCAP150/SMALLCAP250)")
 ax.set_yscale("log")
 ax.set_ylabel("Growth of ₹1 (log scale)")
-ax.set_title("Equity Curve: Magic Formula India vs Nifty 500 TRI vs Cap-Tilt Blend\n(2019-06-01 to 2026-06-01)")
+ax.set_title("Equity Curve: Magic Formula PIT vs Nifty 500 TRI vs Cap-Tilt Blend\n(2019-06-01 to 2026-06-01)")
 ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m"))
 ax.grid(True, which="both", alpha=0.3)
 ax.legend(loc="upper left", fontsize=8)

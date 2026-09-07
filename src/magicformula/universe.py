@@ -73,7 +73,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_USER_AGENT = "MagicFormulaIndia-Research/0.1 (personal, non-commercial research tool)"
+DEFAULT_USER_AGENT = "MagicFormulaPIT-Research/0.1 (personal, non-commercial research tool)"
 
 NSE_EQUITY_LIST_URL = "https://nsearchives.nseindia.com/content/equities/EQUITY_L.csv"
 BSE_ACTIVE_EQUITY_API_URL = (

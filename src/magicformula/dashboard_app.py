@@ -22,8 +22,8 @@ import streamlit as st
 
 PROCESSED_DIR = Path("data/processed")
 
-st.set_page_config(page_title="Magic Formula India", layout="wide")
-st.title("Magic Formula India")
+st.set_page_config(page_title="Magic Formula PIT", layout="wide")
+st.title("Magic Formula PIT")
 
 tab_basket, tab_rank, tab_backtest = st.tabs(["Current Basket", "Rank Table", "Backtest Results"])
 

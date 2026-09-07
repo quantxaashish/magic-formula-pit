@@ -1,4 +1,4 @@
-# Magic Formula India - single source of truth for parameters that were
+# Magic Formula PIT - single source of truth for parameters that were
 # previously hardcoded (differently, and sometimes inconsistently) across
 # scripts/run_real_backtest_pilot.py, scripts/run_expanded_backtest_pilot.py,
 # scripts/run_backtest_stats.py, and scripts/run_cap_tilt_benchmark.py.

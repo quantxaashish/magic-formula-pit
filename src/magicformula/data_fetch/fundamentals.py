@@ -89,7 +89,7 @@ from magicformula.formulas import capital_employed_standard, ebit
 logger = logging.getLogger(__name__)
 
 DEFAULT_USER_AGENT = (
-    "MagicFormulaIndia-Research/0.1 (personal, non-commercial research tool; "
+    "MagicFormulaPIT-Research/0.1 (personal, non-commercial research tool; "
     "see SPEC.md section 2.5 for compliance notes)"
 )
 DEFAULT_RATE_LIMIT_SECONDS = 2.5

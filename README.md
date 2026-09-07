@@ -1,8 +1,11 @@
-# Magic Formula India
+# Magic Formula PIT
 
 NSE/BSE quantitative value screener implementing Joel Greenblatt's Magic
-Formula for the Indian equity market. See `SPEC.md` for the full
-specification this project is being built against.
+Formula for the Indian equity market - PIT for Point-In-Time, this
+project's defining discipline throughout (embargo timing, point-in-time
+market cap, point-in-time price/shares lookups - see `docs/decisions/`
+for why each one exists). See `SPEC.md` for the full specification this
+project is being built against.
 
 This README currently covers Usage and Known Limitations (SPEC.md section
 13 asks for a fuller README - data source reliability, standard vs.

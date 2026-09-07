@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "magicformula"
+name = "magic-formula-pit"
 version = "0.1.0"
-description = "Magic Formula (Greenblatt) quantitative value screener for NSE/BSE"
+description = "NSE/BSE Magic Formula value screener with point-in-time backtesting"
 requires-python = ">=3.11"
 dependencies = [
     "requests>=2.32",

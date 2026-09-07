@@ -43,7 +43,7 @@ import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_USER_AGENT = "MagicFormulaIndia-Research/0.1 (personal, non-commercial research tool)"
+DEFAULT_USER_AGENT = "MagicFormulaPIT-Research/0.1 (personal, non-commercial research tool)"
 
 NSE_BHAVCOPY_URL_TEMPLATE = (
     "https://nsearchives.nseindia.com/content/cm/"

@@ -59,7 +59,7 @@ from magicformula.backtest import (
 )
 from magicformula.universe import build_universe as build_universe_pipeline
 
-app = typer.Typer(help="Magic Formula India - NSE/BSE quantitative value screener.")
+app = typer.Typer(help="Magic Formula PIT - NSE/BSE quantitative value screener with point-in-time backtesting.")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("magicformula.cli")
 

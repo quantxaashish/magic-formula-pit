@@ -103,6 +103,38 @@ Phase 2; built for real once that assumption was checked and found
 wrong. The backtest tab shows the survivorship-bias caveat inline, not
 just in this document, so a dashboard viewer sees it too.
 
+## Quality Overlay (Phase 2)
+
+`magicformula.quality_overlay` adds five independently-toggleable
+signals on top of the plain two-factor ranking - Piotroski F-score,
+Altman Z-score, a Sloan accrual-quality flag, a promoter-pledge
+threshold, and a price-momentum tilt (SPEC.md section 8, the direct
+answer to "more refined stocks" from the original ask). Built,
+synthetic-tested (21 tests, hand-computed ground truth), and validated
+against real cases already investigated in this project
+(`docs/decisions/0014`) - not switched on for the default ranking yet.
+
+Two signals are adapted, not textbook, because screener.in's free tier
+has no current-assets/current-liabilities split: F-score is 7 of the 9
+standard Piotroski tests (drops delta Current Ratio and delta Gross
+Margin), and Z-score is 4 of the original Altman formula's 5 terms
+(drops the Working-Capital/Total-Assets term entirely rather than
+faking a proxy for it) - see the module's own docstring for exactly
+which tests/terms and why.
+
+**Real validation, reusing evidence already on hand rather than fresh
+cases**: Ashok Leyland's Z-score genuinely crosses into distress in
+FY2025-2026 (1.66, then 1.41) - the same years the Total Assets/EBIT
+anomaly check flagged it, using a completely unrelated calculation, a
+real independent corroboration. VEDL's quality signals do *not* single
+out its anomaly-flagged FY2026 - its Z-score has been persistently weak
+for most of its 12-year history and its F-score in FY2026 is a perfect
+7/7 - reinforcing that its flag was a one-off balance-sheet event, not a
+broader deterioration. PAGEIND's Z-score is dramatically safe every
+single year (21.5-61.7 against a 3.0 "safe" threshold), confirming its
+persistent anomaly flag is a peer-group mismatch, not a real problem.
+Full detail in `docs/decisions/0014`.
+
 ## Known Limitations
 
 ### Survivorship bias - the single most important caveat on every backtest number below
@@ -218,9 +250,11 @@ section 1, and currently isn't checked at all.
 **Also a hard blocker for the small-cap bucket specifically**: distressed
 companies heading toward insolvency are disproportionately small/micro
 cap, and are exactly the kind of "statistically cheap for a reason" trap
-the Magic Formula's plain two-factor version is known to walk into without
-the Phase 2 quality overlay (Altman Z-score, etc. - SPEC.md section 8),
-which also isn't built yet.
+the Magic Formula's plain two-factor version is known to walk into. The
+Phase 2 quality overlay (`magicformula.quality_overlay`, SPEC.md section
+8) is built and real-case-validated (see the Quality Overlay section
+below), but not switched on for the default ranking - a company can
+still slip through this specific gap until it is.
 
 ### ETF/REIT/InvIT exclusion - name heuristic, not authoritative
 

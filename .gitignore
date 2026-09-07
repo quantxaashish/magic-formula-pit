@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.benchmarks/
+build/
+dist/
+
+# data/raw/ is scratch: yfinance/screener.in caches, run logs, and
+# superseded pilot outputs - all large and/or regenerable by re-running
+# the relevant script against cached or live sources (see docs/decisions
+# and scripts/*.py for how). data/processed/ holds point-in-time
+# snapshots of the outputs actually worth keeping (full universe
+# fundamentals, final pilot/backtest results, the two section 7 charts)
+# copied out of data/raw/ deliberately - not auto-tracked, so a
+# regenerated data/raw/ file doesn't silently change committed history.
+data/raw/
+data/cache/
+
+# OS
+.DS_Store
+Thumbs.db

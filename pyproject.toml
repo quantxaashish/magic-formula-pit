@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "magicformula"
+version = "0.1.0"
+description = "Magic Formula (Greenblatt) quantitative value screener for NSE/BSE"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.32",
+    "beautifulsoup4>=4.13",
+    "lxml>=5.3",
+    "openpyxl>=3.1",
+    "pandas>=2.3",
+    "numpy>=1.26",
+    "yfinance==1.7.0",
+    "pyarrow>=21.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "scipy>=1.16"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

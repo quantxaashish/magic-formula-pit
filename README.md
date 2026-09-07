@@ -26,13 +26,14 @@ in `config/settings.yaml`, the single source of truth `cli.py` reads
 from. Edit it there, not in code, to change any of these.
 
 **Producing the current basket from a clean state - the exact 4-command
-sequence actually run and confirmed working**, not a hypothetical one:
+sequence actually run twice and confirmed working**, not a hypothetical
+one:
 
 ```bash
-magicformula build-universe   # ~5 seconds
-magicformula fetch-data       # ~30-45 min on a warm cache, hours cold - see below
-magicformula rank             # ~4 seconds - optional, basket already ranks internally
-magicformula basket           # ~3 seconds
+magicformula build-universe   # 4.9s
+magicformula fetch-data       # 38m26s (see below - real cache misses, not a rate-limiter bug)
+magicformula rank             # 3.4-3.6s - optional, basket already ranks internally
+magicformula basket           # 3.3-3.4s
 ```
 
 `build-universe` fetches NSE+BSE+AMFI and writes
@@ -42,31 +43,65 @@ fundamentals (screener.in) and point-in-time price/shares series
 (yfinance) for every eligible company, writing
 `data/processed/fundamentals.parquet` and caching to
 `data/raw/screener_html_cache/` and
-`data/raw/point_in_time_series_cache.pkl`. **This is genuinely slow even
-on a warm cache** - a real run against an almost-fully-warm cache (1,774
-of 1,932 companies already cached, 158 new ones fetched live) took **38
-minutes**, because parsing ~1,900 cached HTML statements and rebuilding
-the anomaly-check peer pools has real CPU cost independent of network
-I/O; budget 1.5-2.5+ hours on a fully cold cache. `rank` prints the
-current Magic Formula ranking without touching the turnover buffer or
-holdings state - useful to inspect, not required before `basket`. `basket`
-does the real work: ranks, applies the turnover buffer against whatever
-was last held (`data/processed/current_holdings.json`, empty on a first
-run), and writes `data/processed/current_basket.csv` - a real run
-produced an 89-name equal-weighted basket.
+`data/raw/point_in_time_series_cache.pkl`. **A real run took 38m26s
+against an almost-fully-warm cache.** Checked precisely, not assumed:
+`ScreenerClient.fetch_html` checks its on-disk cache *before* invoking
+the rate limiter, so a genuine cache hit never waits behind the 2.5s
+per-request delay - confirmed both by reading the code path and by
+checking file timestamps after the run (only 436 of 2,404 cached HTML
+files were newly written; the other ~1,968 were served from cache with
+no network call at all). The 38 minutes is fully accounted for by real
+work: those 436 genuine cache misses at the 2.5s rate limit (~18
+minutes - some were companies new to this run's fresh universe pull,
+others were a statement type, consolidated vs. standalone, that a prior
+run's fallback logic never happened to cache), 158 live yfinance
+price/share fetches, and CPU cost parsing ~1,900 statements and
+rebuilding the anomaly-check peer pools. No rate-limiter fix was needed;
+budget 1.5-2.5+ hours on a fully cold cache (no `data/raw/` caches at
+all), per `full_universe_fundamentals_fetch.py`'s own prior estimate.
+
+`rank` computes and prints the current Magic Formula ranking (a real
+run: 295 ranked stocks) and writes `data/processed/current_ranking.csv`
+- useful to inspect, not required before `basket`. `basket` does the
+real work: ranks, applies the turnover buffer against whatever was last
+held (`data/processed/current_holdings.json`, empty on a first run), and
+writes `data/processed/current_basket.csv`. Run twice against the same
+fetched data: the first run produced a fresh 89-name basket (89 buys, 0
+sells - nothing held yet); the second run, using the holdings state the
+first run wrote, correctly added 7 new names while keeping all 89
+previous ones (7 buys, 0 sells vs. the persisted state) - real evidence
+the turnover buffer persists across invocations as designed, not just
+that the command runs without crashing.
 
 `magicformula backtest` runs the full historical rebalance walk
 (`config/settings.yaml`'s `backtest.start_year` through the current year)
-and reports CAGR/volatility/Sharpe/max-drawdown/turnover; pass
-`--benchmark-returns-json path/to/returns.json` (a list of per-period
-returns, one shorter than the rebalance-date count) for hit-rate and
-excess-return stats against a real index - Nifty 500 TRI values aren't
-fetched automatically (see `docs/decisions/0012` for how they were
-sourced by hand for this project's own backtest). `magicformula
-dashboard` is a documented stub - not yet implemented, sequenced after
-`quality_overlay.py` (Phase 2) so the dashboard presents that layer's
-effect on the basket, not a version of this pipeline built before it
-exists.
+and reports CAGR/volatility/Sharpe/max-drawdown/turnover, writing
+`data/processed/cli_backtest_baskets.csv` and `cli_backtest_stats.json`
+(named distinctly from this repo's own manually-produced
+`backtest_stats.json`/`backtest_baskets_2019_2026.csv` research snapshot
+- both existed briefly at the same filename during development and the
+CLI's default run silently overwrote the real one twice before this
+rename fixed it for good). Pass `--benchmark-returns-json
+path/to/returns.json` (a list of per-period returns, one shorter than
+the rebalance-date count) for hit-rate and excess-return stats against a
+real index - Nifty 500 TRI values aren't fetched automatically (see
+`docs/decisions/0012` for how they were sourced by hand for this
+project's own backtest).
+
+`magicformula dashboard` launches a real Streamlit app
+(`src/magicformula/dashboard_app.py`) with three tabs - Current Basket,
+Rank Table, Backtest Results - reading only files the commands above
+already produce. Verified working end to end (not just that it starts):
+launched on a real port, opened in a browser, and confirmed each tab
+renders real data - the 96-name basket with its bucket breakdown, the
+295-stock ranking, and the real backtest's CAGR/Sharpe/drawdown plus its
+equity-curve chart and per-date basket composition. None of these three
+views need `quality_overlay.py` (SPEC.md section 9 scopes the dashboard
+to exactly these three views) - it was a documented stub in an earlier
+draft of this README on the mistaken assumption that it should wait for
+Phase 2; built for real once that assumption was checked and found
+wrong. The backtest tab shows the survivorship-bias caveat inline, not
+just in this document, so a dashboard viewer sees it too.
 
 ## Known Limitations
 

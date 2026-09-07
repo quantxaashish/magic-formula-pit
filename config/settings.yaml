@@ -1,0 +1,65 @@
+# Magic Formula India - single source of truth for parameters that were
+# previously hardcoded (differently, and sometimes inconsistently) across
+# scripts/run_real_backtest_pilot.py, scripts/run_expanded_backtest_pilot.py,
+# scripts/run_backtest_stats.py, and scripts/run_cap_tilt_benchmark.py.
+# cli.py reads this file; it does not hardcode its own copies of these
+# values. Library code (magicformula.*) keeps its own tested defaults for
+# direct/programmatic use (e.g. by tests) - this file is what the CLI
+# actually passes in, not a second, unrelated set of magic numbers.
+
+universe:
+  amfi_xlsx_url: "https://www.amfiindia.com/Themes/Theme1/downloads/AverageMarketCapitalization31Dec2025.xlsx"
+  # as_of: null means "today" at run time - set an explicit date to pin a
+  # universe snapshot (useful for reproducing a past run).
+  as_of: null
+
+fundamentals:
+  # SEBI's annual-filing public-availability lag (magicformula.data_fetch.
+  # fundamentals.ANNUAL_FILING_LAG_DAYS) - the single place the point-in-time
+  # embargo lives, decision 0011. Widen here, not in backtest.py.
+  annual_filing_lag_days: 60
+  # Log-IQR (Tukey fence) anomaly check calibration, decision 0010.
+  anomaly_iqr_k: 1.5
+  anomaly_min_sector_size: 5
+  # flag_only vs exclude, decided in decision 0013 after running both side
+  # by side on the real 2019-2026 walk: the difference (0.34pp CAGR, 0.007
+  # Sharpe, ~1pt max drawdown traced to 6 specific COVID-year stock swaps,
+  # not a structural property of exclude-mode) isn't distinguishable from
+  # noise on a 7-period sample, and flag_only preserves the anomaly_reasons
+  # column for exactly the kind of manual investigation that correctly
+  # resolved the VEDL/PAGEIND false-positive case. Change only with a new
+  # decision doc, not silently.
+  anomaly_mode: flag_only
+
+ranking:
+  roce_mode: standard  # "standard" or "strict_greenblatt", SPEC.md section 3
+
+prices:
+  # Both empirically measured and sensitivity-swept, decision 0012 - not
+  # guesses. Widening either silently reintroduces the double-embargo-style
+  # bug class that decision found; change only with a new decision doc.
+  price_lookup_max_tolerance_days: 14
+  shares_lookup_max_tolerance_days: 90
+
+portfolio:
+  top_n: 30                 # basket size per cap bucket (large/mid/small each)
+  buffer_multiplier: 1.5    # turnover control: hold until outside top_n x this
+  max_sector_fraction: 0.30 # single-sector concentration cap per basket
+
+backtest:
+  rebalance_month: 6
+  rebalance_day: 1
+  # Real backtest start year, decision 0012: 2016-2018 coverage is under
+  # 1.5% in every cap bucket (not usable, not a caveat), confirmed at the
+  # final 90-day shares-lookup tolerance against the actual pipeline, not
+  # just a cache-based sweep. end_year: null means "current year".
+  start_year: 2019
+  end_year: null
+  transaction_cost_bps: 25.0
+  # Stated proxy, not the literal 91-day T-bill series (no reliable weekly
+  # series was obtainable this session) - time-weighted average RBI policy
+  # repo rate over the actual backtest window, computed from documented
+  # rate-change dates. See docs/decisions/0012 and the backtest-stats
+  # script's own docstring for the full derivation.
+  risk_free_rate: 0.053
+  periods_per_year: 1.0

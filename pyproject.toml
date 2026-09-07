@@ -16,10 +16,15 @@ dependencies = [
     "numpy>=1.26",
     "yfinance==1.7.0",
     "pyarrow>=21.0",
+    "typer>=0.20",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "scipy>=1.16"]
+
+[project.scripts]
+magicformula = "magicformula.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]

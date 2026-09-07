@@ -151,12 +151,53 @@ def test_parse_company_html_extracts_full_multi_year_history_for_tcs():
     assert latest.borrowings == 11283
     assert latest.as_of_date == date(2026, 5, 30)
 
+    # quality_overlay.py fields (decision 0014) - sales/net_profit/CFO/
+    # equity_capital are per-fiscal-year like everything above; TCS has no
+    # promoter-pledge "Insights" bullet, so it should parse as None (not 0,
+    # not a KeyError) - see test_parse_company_html_extracts_promoter_pledge_for_ashok_leyland
+    # for the case where the bullet is actually present.
+    assert earliest.sales == 94648
+    assert earliest.net_profit == 20060
+    assert earliest.cash_from_operations == 19369
+    assert earliest.equity_capital == 196
+    assert earliest.promoter_pledge_percentage is None
+
+    assert latest.sales == 267021
+    assert latest.net_profit == 49454
+    assert latest.cash_from_operations == 52094
+    assert latest.equity_capital == 362
+    assert latest.promoter_pledge_percentage is None
+
     # market_cap is screener's current figure - same value on every
     # historical record by construction (see FundamentalsRecord's
     # docstring caveat), not something to expect variation in here.
     assert all(r.market_cap == 833607 for r in records)
     assert all(r.cap_bucket is None for r in records)  # not populated by this module alone
     assert all(r.anomaly_reasons == [] for r in records)
+
+
+def test_parse_company_html_extracts_promoter_pledge_for_ashok_leyland():
+    # Real, live-checked case (not hypothesized): Ashok Leyland's page
+    # carries an "Insights" bullet - "Promoters have pledged 40.1% of
+    # their holding." - which TCS/Siemens/Tata Power/RECLTD do not have at
+    # all. This is a *current* snapshot (like market_cap), so it repeats
+    # identically across every fiscal-year record from one fetch.
+    html = (FIXTURES_DIR / "ASHOKLEY.html").read_text(encoding="utf-8")
+    records = parse_company_html(html, "ASHOKLEY", "https://www.screener.in/company/ASHOKLEY/consolidated/")
+
+    assert len(records) == 12
+    assert all(r.promoter_pledge_percentage == 40.1 for r in records)
+
+    latest = records[-1]
+    assert latest.fiscal_year_end == date(2026, 3, 31)
+    assert latest.sales == 48314
+    assert latest.net_profit == 3721
+    # Real, notable finding this parser extension surfaces: Ashok Leyland's
+    # FY2026 operating cash flow is negative despite positive net profit -
+    # exactly the kind of earnings-quality gap the accrual flag exists to
+    # catch (see docs/decisions/0014).
+    assert latest.cash_from_operations == -4895
+    assert latest.equity_capital == 587
 
 
 # --- ScreenerClient (network mocked) --------------------------------------

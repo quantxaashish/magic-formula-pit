@@ -165,6 +165,20 @@ class FundamentalsRecord:
     cap_bucket: str | None = None  # "large"/"mid"/"small"; filled in from universe.py's
     # AMFI categorization once merged - not produced by this module alone.
     anomaly_reasons: list[str] = field(default_factory=list)
+    # Added for quality_overlay.py (Phase 2 - F-score, Z-score, accrual
+    # flag, promoter-pledge threshold). Per-fiscal-year like the rest of
+    # this record, EXCEPT promoter_pledge_percentage, which - like
+    # market_cap - is screener.in's *current* snapshot repeated on every
+    # returned record, not a real historical time series (screener.in's
+    # free-tier page doesn't show pledge history by fiscal year, only a
+    # present-day "Insights" bullet). None means "no pledge disclosed at
+    # this threshold", not "confirmed zero" - screener.in only surfaces
+    # this bullet when pledging is material enough to flag.
+    sales: float | None = None
+    net_profit: float | None = None
+    cash_from_operations: float | None = None
+    equity_capital: float | None = None
+    promoter_pledge_percentage: float | None = None
     as_of_date: date = field(init=False)
 
     def __post_init__(self) -> None:
@@ -260,6 +274,36 @@ def _header(table) -> list[str]:
 
 def _to_number(text: str) -> float:
     return float(text.replace(",", "").replace("₹", "").replace("Cr.", "").strip())
+
+
+def _to_number_or_none(text: str) -> float | None:
+    """Same as _to_number, but returns None instead of raising on an
+    unparseable cell (e.g. screener.in's "-" placeholder for a year a
+    line item didn't apply). Used only for the optional quality-overlay
+    fields (sales, net_profit, equity_capital, cash_from_operations) -
+    unlike the required fields, a bad value in one of these shouldn't
+    drop an otherwise-good fiscal-year record that the rest of the
+    pipeline already depends on.
+    """
+    try:
+        return _to_number(text)
+    except ValueError:
+        return None
+
+
+def _promoter_pledge_percentage(soup: BeautifulSoup) -> float | None:
+    """screener.in surfaces a material promoter pledge as a plain-text
+    "Insights" bullet - "Promoters have pledged X% of their holding." -
+    not a numeric table row, and only when pledging is significant enough
+    to flag (confirmed live: Ashok Leyland shows this bullet at 40.1%
+    pledged; TCS/Siemens/Tata Power/RECLTD show no such bullet at all).
+    Returns None when the bullet isn't present - that means "no pledge
+    disclosed at this threshold", not "confirmed zero pledge". This is a
+    *current* snapshot, like market_cap - screener.in doesn't show pledge
+    history by fiscal year on this page.
+    """
+    match = re.search(r"pledged\s+([\d.]+)%", soup.get_text(), re.IGNORECASE)
+    return float(match.group(1)) if match else None
 
 
 def _parse_fiscal_year_end(label: str) -> date:
@@ -404,11 +448,14 @@ def parse_company_html(
 
     pl_table = None
     bs_table = None
+    cf_table = None
     for table in soup.find_all("table"):
         if _row(table, "Operating Profit") and "TTM" in _header(table):
             pl_table = table
         if _row(table, "Total Assets"):
             bs_table = table
+        if _row(table, "Cash from Operating Activity"):
+            cf_table = table
 
     if pl_table is None or bs_table is None:
         raise ValueError(f"{symbol}: could not locate annual P&L / balance sheet tables")
@@ -423,6 +470,17 @@ def parse_company_html(
     investments_row = _row(bs_table, "Investments")
     cwip_row = _row(bs_table, "CWIP")
     borrowings_row = _row(bs_table, "Borrowings")
+    # Added for quality_overlay.py (decision 0014) - all optional (None if
+    # the row or table is absent), unlike the required rows above, since
+    # F-score/Z-score/accrual-flag callers already need to handle missing
+    # quality data gracefully (a company lacking these was never fetchable
+    # for this purpose before this parser change existed).
+    sales_row = _row(pl_table, "Sales")
+    net_profit_row = _row(pl_table, "Net Profit")
+    equity_capital_row = _row(bs_table, "Equity Capital")
+    cfo_row = _row(cf_table, "Cash from Operating Activity") if cf_table is not None else None
+    cf_years = _fiscal_year_index_map(_header(cf_table)) if cf_table is not None else {}
+    promoter_pledge_percentage = _promoter_pledge_percentage(soup)
 
     pl_years = _fiscal_year_index_map(_header(pl_table))
     bs_years = _fiscal_year_index_map(_header(bs_table))
@@ -480,6 +538,18 @@ def parse_company_html(
                     market_cap=market_cap,
                     source_url=source_url,
                     statement=statement,
+                    sales=_to_number_or_none(sales_row[pl_i])
+                    if sales_row and pl_i < len(sales_row) else None,
+                    net_profit=_to_number_or_none(net_profit_row[pl_i])
+                    if net_profit_row and pl_i < len(net_profit_row) else None,
+                    equity_capital=_to_number_or_none(equity_capital_row[bs_i])
+                    if equity_capital_row and bs_i < len(equity_capital_row) else None,
+                    cash_from_operations=(
+                        _to_number_or_none(cfo_row[cf_years[fiscal_year_end]])
+                        if cfo_row and fiscal_year_end in cf_years
+                        and cf_years[fiscal_year_end] < len(cfo_row) else None
+                    ),
+                    promoter_pledge_percentage=promoter_pledge_percentage,
                 )
             )
         except (IndexError, ValueError) as exc:

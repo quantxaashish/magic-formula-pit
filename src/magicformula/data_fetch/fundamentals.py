@@ -178,6 +178,7 @@ class FundamentalsRecord:
     net_profit: float | None = None
     cash_from_operations: float | None = None
     equity_capital: float | None = None
+    reserves: float | None = None
     promoter_pledge_percentage: float | None = None
     as_of_date: date = field(init=False)
 
@@ -478,6 +479,7 @@ def parse_company_html(
     sales_row = _row(pl_table, "Sales")
     net_profit_row = _row(pl_table, "Net Profit")
     equity_capital_row = _row(bs_table, "Equity Capital")
+    reserves_row = _row(bs_table, "Reserves")
     cfo_row = _row(cf_table, "Cash from Operating Activity") if cf_table is not None else None
     cf_years = _fiscal_year_index_map(_header(cf_table)) if cf_table is not None else {}
     promoter_pledge_percentage = _promoter_pledge_percentage(soup)
@@ -544,6 +546,8 @@ def parse_company_html(
                     if net_profit_row and pl_i < len(net_profit_row) else None,
                     equity_capital=_to_number_or_none(equity_capital_row[bs_i])
                     if equity_capital_row and bs_i < len(equity_capital_row) else None,
+                    reserves=_to_number_or_none(reserves_row[bs_i])
+                    if reserves_row and bs_i < len(reserves_row) else None,
                     cash_from_operations=(
                         _to_number_or_none(cfo_row[cf_years[fiscal_year_end]])
                         if cfo_row and fiscal_year_end in cf_years

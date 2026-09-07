@@ -160,12 +160,14 @@ def test_parse_company_html_extracts_full_multi_year_history_for_tcs():
     assert earliest.net_profit == 20060
     assert earliest.cash_from_operations == 19369
     assert earliest.equity_capital == 196
+    assert earliest.reserves == 50439
     assert earliest.promoter_pledge_percentage is None
 
     assert latest.sales == 267021
     assert latest.net_profit == 49454
     assert latest.cash_from_operations == 52094
     assert latest.equity_capital == 362
+    assert latest.reserves == 106878
     assert latest.promoter_pledge_percentage is None
 
     # market_cap is screener's current figure - same value on every
@@ -198,6 +200,7 @@ def test_parse_company_html_extracts_promoter_pledge_for_ashok_leyland():
     # catch (see docs/decisions/0014).
     assert latest.cash_from_operations == -4895
     assert latest.equity_capital == 587
+    assert latest.reserves == 13654
 
 
 # --- ScreenerClient (network mocked) --------------------------------------

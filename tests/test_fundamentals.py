@@ -203,6 +203,29 @@ def test_parse_company_html_extracts_promoter_pledge_for_ashok_leyland():
     assert latest.reserves == 13654
 
 
+def test_parse_company_html_pageind_standalone_is_the_real_usable_fetch():
+    # Real, surfaced-by-accident case (decision 0014): PAGEIND's cached
+    # "consolidated" page has no proper annual P&L/balance-sheet table at
+    # all (screener.in serves a reduced page for it) - decision 0003's
+    # consolidated/standalone fallback exists exactly for this, and the
+    # *standalone* statement is PAGEIND's real, usable 12-year history.
+    html = (FIXTURES_DIR / "PAGEIND.html").read_text(encoding="utf-8")
+    records = parse_company_html(
+        html, "PAGEIND", "https://www.screener.in/company/PAGEIND/consolidated/", statement="standalone"
+    )
+
+    assert len(records) == 12
+    latest = records[-1]
+    assert latest.fiscal_year_end == date(2026, 3, 31)
+    assert latest.sales == 5247
+    assert latest.net_profit == 764
+    assert latest.cash_from_operations == 794
+    assert latest.equity_capital == 11
+    assert latest.reserves == 1491
+    # No pledge-related "Insights" bullet on this page - None, not 0.
+    assert latest.promoter_pledge_percentage is None
+
+
 # --- ScreenerClient (network mocked) --------------------------------------
 
 
